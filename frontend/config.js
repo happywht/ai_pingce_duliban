@@ -72,10 +72,12 @@
          */
         detectApiBase() {
             const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+            const port = window.location.port || '5000';
 
-            // 本地开发环境
+            // 本地开发环境 - 使用与页面相同的hostname避免CORS问题
             if (hostname === 'localhost' || hostname === '127.0.0.1') {
-                return 'http://127.0.0.1:5000/api';
+                return `${protocol}//${hostname}:${port}/api`;
             }
 
             // 内网服务器
@@ -84,7 +86,7 @@
             }
 
             // 其他环境：使用同服务器的5000端口
-            return `http://${hostname}:5000/api`;
+            return `${protocol}//${hostname}:5000/api`;
         }
 
         /**

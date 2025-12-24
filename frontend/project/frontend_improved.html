@@ -744,8 +744,8 @@
 
             // 导航到项目详情页
             const goToProjectDetail = (projectId) => {
-                // 构建项目详情页URL
-                const detailUrl = `project-detail.html?project_id=${encodeURIComponent(projectId)}`;
+                // 构建项目详情页URL - 使用正确的相对路径
+                const detailUrl = `./project/project-detail.html?project_id=${encodeURIComponent(projectId)}`;
                 window.open(detailUrl, '_blank');
             };
 
