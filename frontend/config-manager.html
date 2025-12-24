@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统配置管理 - AI评测系统</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .config-section {
+            transition: all 0.3s ease;
+        }
+        .config-section:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="min-h-screen py-8 px-4">
+        <div class="max-w-4xl mx-auto">
+
+            <!-- 页面标题 -->
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-white mb-2 flex items-center justify-center gap-3">
+                    <i class="ph-fill ph-gear"></i>
+                    系统配置管理
+                </h1>
+                <p class="text-white/80">统一配置 API 地址和系统参数</p>
+            </div>
+
+            <!-- 主配置卡片 -->
+            <div class="glass-card rounded-2xl shadow-2xl p-8 mb-6">
+
+                <!-- 当前API地址展示 -->
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-6 border border-blue-100">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="text-sm font-medium text-gray-600 mb-1 block">当前API地址</label>
+                            <div class="text-2xl font-bold text-gray-900 font-mono">
+                                {{ currentConfig.apiBase || '未配置' }}
+                            </div>
+                        </div>
+                        <button @click="testConnection"
+                                :disabled="testing"
+                                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors">
+                            <i class="ph-bold" :class="testing ? 'ph-spinner animate-spin' : 'ph-plugs-connected'"></i>
+                            {{ testing ? '测试中...' : '测试连接' }}
+                        </button>
+                    </div>
+                    <div v-if="testResult" class="mt-4">
+                        <div :class="[
+                            'px-4 py-2 rounded-lg flex items-center gap-2',
+                            testResult.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                        ]">
+                            <i :class="testResult.success ? 'ph-bold ph-check-circle' : 'ph-bold ph-x-circle'"></i>
+                            {{ testResult.message }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 配置表单 -->
+                <div class="space-y-6">
+
+                    <!-- API配置 -->
+                    <div class="config-section bg-white rounded-xl p-6 border border-gray-200">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                            <i class="ph-fill ph-server text-blue-600"></i>
+                            API配置
+                        </h3>
+
+                        <div class="space-y-4">
+                            <!-- API基础地址 -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    API基础地址 <span class="text-red-500">*</span>
+                                </label>
+                                <div class="flex gap-2">
+                                    <input v-model="form.apiBase"
+                                           type="text"
+                                           placeholder="例如: http://10.1.2.198:5000/api"
+                                           class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    <button @click="autoDetect"
+                                            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2 transition-colors">
+                                        <i class="ph-bold ph-magic-wand"></i>
+                                        自动检测
+                                    </button>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    后端API服务的完整地址，包含 /api 路径
+                                </p>
+                            </div>
+
+                            <!-- API超时 -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    API超时时间（毫秒）
+                                </label>
+                                <input v-model.number="form.apiTimeout"
+                                       type="number"
+                                       placeholder="30000"
+                                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 系统配置 -->
+                    <div class="config-section bg-white rounded-xl p-6 border border-gray-200">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                            <i class="ph-fill ph-sliders text-purple-600"></i>
+                            系统配置
+                        </h3>
+
+                        <div class="space-y-4">
+                            <!-- 调试模式 -->
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">调试模式</label>
+                                    <p class="text-xs text-gray-500">开启后会输出详细的调试日志</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input v-model="form.debugMode" type="checkbox" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+
+                            <!-- Mock数据 -->
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">启用Mock数据</label>
+                                    <p class="text-xs text-gray-500">用于前端开发测试，不连接真实后端</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input v-model="form.enableMock" type="checkbox" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+
+                            <!-- 自动刷新间隔 -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    自动刷新间隔（毫秒，0表示不自动刷新）
+                                </label>
+                                <input v-model.number="form.autoRefreshInterval"
+                                       type="number"
+                                       placeholder="0"
+                                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 分页配置 -->
+                    <div class="config-section bg-white rounded-xl p-6 border border-gray-200">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                            <i class="ph-fill ph-list-dashes text-green-600"></i>
+                            分页配置
+                        </h3>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    每页显示数量
+                                </label>
+                                <input v-model.number="form.pagination.pageSize"
+                                       type="number"
+                                       placeholder="20"
+                                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    最大每页数量
+                                </label>
+                                <input v-model.number="form.pagination.maxPageSize"
+                                       type="number"
+                                       placeholder="100"
+                                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 操作按钮 -->
+                    <div class="flex flex-wrap gap-3 pt-4 border-t border-gray-200">
+                        <button @click="saveConfig"
+                                :disabled="saving"
+                                class="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors">
+                            <i class="ph-bold" :class="saving ? 'ph-spinner animate-spin' : 'ph-floppy-disk'"></i>
+                            {{ saving ? '保存中...' : '保存配置' }}
+                        </button>
+                        <button @click="resetConfig"
+                                class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-arrow-counter-clockwise"></i>
+                            重置默认
+                        </button>
+                        <button @click="exportConfig"
+                                class="px-6 py-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-download"></i>
+                            导出
+                        </button>
+                        <button @click="showImportModal = true"
+                                class="px-6 py-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-upload"></i>
+                            导入
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 快速切换模板 -->
+            <div class="glass-card rounded-2xl shadow-2xl p-6 mb-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <i class="ph-fill ph-lightning text-yellow-500"></i>
+                    快速切换
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <button @click="quickSet('local')"
+                            class="p-4 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors text-left">
+                        <div class="font-semibold text-blue-900">本地开发</div>
+                        <div class="text-sm text-blue-600 font-mono mt-1">http://127.0.0.1:5000/api</div>
+                    </button>
+                    <button @click="quickSet('server198')"
+                            class="p-4 bg-green-50 rounded-xl hover:bg-green-100 transition-colors text-left">
+                        <div class="font-semibold text-green-900">服务器 198</div>
+                        <div class="text-sm text-green-600 font-mono mt-1">http://10.1.2.198:5000/api</div>
+                    </button>
+                    <button @click="quickSet('custom')"
+                            class="p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition-colors text-left">
+                        <div class="font-semibold text-purple-900">自定义</div>
+                        <div class="text-sm text-purple-600 mt-1">输入您的服务器地址</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 使用说明 -->
+            <div class="glass-card rounded-2xl shadow-2xl p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <i class="ph-fill ph-info text-blue-500"></i>
+                    使用说明
+                </h3>
+                <div class="space-y-3 text-sm text-gray-700">
+                    <div class="flex items-start gap-2">
+                        <i class="ph-bold ph-check-circle text-green-500 mt-0.5"></i>
+                        <span>配置保存在浏览器本地，不同电脑需要分别配置</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <i class="ph-bold ph-check-circle text-green-500 mt-0.5"></i>
+                        <span>可以通过URL参数临时覆盖配置：<code class="bg-gray-100 px-2 py-0.5 rounded">?api_base=http://localhost:8000/api</code></span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <i class="ph-bold ph-check-circle text-green-500 mt-0.5"></i>
+                        <span>导出配置功能可以用于备份或在多台电脑间同步配置</span>
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <i class="ph-bold ph-check-circle text-green-500 mt-0.5"></i>
+                        <span>所有页面的API地址都会自动使用此处配置的地址</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 导入配置模态框 -->
+        <div v-if="showImportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-2xl p-6 max-w-lg w-full mx-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">导入配置</h3>
+                    <button @click="showImportModal = false" class="text-gray-400 hover:text-gray-600">
+                        <i class="ph-bold ph-x text-xl"></i>
+                    </button>
+                </div>
+                <textarea v-model="importText"
+                          rows="10"
+                          placeholder='{"version": "1.0.0", "config": {...}}'
+                          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"></textarea>
+                <div class="flex gap-3 mt-4">
+                    <button @click="importConfig"
+                            class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        导入
+                    </button>
+                    <button @click="showImportModal = false"
+                            class="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
+                        取消
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 通知提示 -->
+        <div v-if="notification.show"
+             :class="[
+                 'fixed top-4 right-4 px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 z-50',
+                 notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+             ]">
+            <i :class="[
+                'text-xl',
+                notification.type === 'success' ? 'ph-bold ph-check-circle' : 'ph-bold ph-x-circle'
+            ]"></i>
+            <span>{{ notification.message }}</span>
+        </div>
+
+    </div>
+
+    <!-- 引入配置管理器 -->
+    <script src="./config.js"></script>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const currentConfig = ref({});
+                const form = ref({
+                    apiBase: '',
+                    apiTimeout: 30000,
+                    debugMode: false,
+                    enableMock: false,
+                    autoRefreshInterval: 0,
+                    pagination: {
+                        pageSize: 20,
+                        maxPageSize: 100
+                    }
+                });
+
+                const testing = ref(false);
+                const testResult = ref(null);
+                const saving = ref(false);
+                const showImportModal = ref(false);
+                const importText = ref('');
+
+                const notification = ref({
+                    show: false,
+                    type: 'success',
+                    message: ''
+                });
+
+                // 显示通知
+                const showNotification = (message, type = 'success') => {
+                    notification.value = { show: true, type, message };
+                    setTimeout(() => {
+                        notification.value.show = false;
+                    }, 3000);
+                };
+
+                // 加载当前配置
+                const loadCurrentConfig = () => {
+                    const config = window.AppConfig.get();
+                    currentConfig.value = { ...config };
+                    form.value = JSON.parse(JSON.stringify(config));
+                };
+
+                // 测试连接
+                const testConnection = async () => {
+                    if (!form.value.apiBase) {
+                        showNotification('请先输入API地址', 'error');
+                        return;
+                    }
+
+                    testing.value = true;
+                    testResult.value = null;
+
+                    // 临时设置配置进行测试
+                    const originalApiBase = window.AppConfig.getApiBase();
+                    window.AppConfig.set('apiBase', form.value.apiBase, false);
+
+                    const result = await window.AppConfig.testConnection();
+                    testResult.value = result;
+
+                    // 恢复原配置
+                    window.AppConfig.set('apiBase', originalApiBase, false);
+                    testing.value = false;
+
+                    if (result.success) {
+                        showNotification('连接测试成功！', 'success');
+                    } else {
+                        showNotification('连接测试失败：' + result.message, 'error');
+                    }
+                };
+
+                // 自动检测
+                const autoDetect = () => {
+                    const hostname = window.location.hostname;
+                    let detected = '';
+
+                    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                        detected = 'http://127.0.0.1:5000/api';
+                    } else if (hostname === '10.1.2.198') {
+                        detected = 'http://10.1.2.198:5000/api';
+                    } else {
+                        detected = `http://${hostname}:5000/api`;
+                    }
+
+                    form.value.apiBase = detected;
+                    showNotification('已自动检测API地址', 'success');
+                };
+
+                // 保存配置
+                const saveConfig = () => {
+                    if (!form.value.apiBase) {
+                        showNotification('API地址不能为空', 'error');
+                        return;
+                    }
+
+                    saving.value = true;
+
+                    // 验证URL格式
+                    try {
+                        new URL(form.value.apiBase);
+                    } catch (error) {
+                        showNotification('API地址格式不正确', 'error');
+                        saving.value = false;
+                        return;
+                    }
+
+                    // 保存配置
+                    window.AppConfig.set(form.value);
+                    currentConfig.value = { ...form.value };
+
+                    saving.value = false;
+                    showNotification('配置保存成功！', 'success');
+                };
+
+                // 重置配置
+                const resetConfig = () => {
+                    if (confirm('确定要重置为默认配置吗？')) {
+                        window.AppConfig.reset();
+                        loadCurrentConfig();
+                        showNotification('配置已重置', 'success');
+                    }
+                };
+
+                // 导出配置
+                const exportConfig = () => {
+                    const configJson = window.AppConfig.export();
+                    const blob = new Blob([configJson], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `ai-pingce-config-${new Date().toISOString().slice(0, 10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showNotification('配置已导出', 'success');
+                };
+
+                // 导入配置
+                const importConfig = () => {
+                    try {
+                        const result = window.AppConfig.import(importText.value);
+                        if (result.success) {
+                            loadCurrentConfig();
+                            showImportModal.value = false;
+                            importText.value = '';
+                            showNotification('配置导入成功', 'success');
+                        } else {
+                            showNotification('导入失败：' + result.message, 'error');
+                        }
+                    } catch (error) {
+                        showNotification('配置格式错误', 'error');
+                    }
+                };
+
+                // 快速切换
+                const quickSet = (type) => {
+                    switch (type) {
+                        case 'local':
+                            form.value.apiBase = 'http://127.0.0.1:5000/api';
+                            break;
+                        case 'server198':
+                            form.value.apiBase = 'http://10.1.2.198:5000/api';
+                            break;
+                        case 'custom':
+                            const custom = prompt('请输入自定义API地址：');
+                            if (custom) {
+                                form.value.apiBase = custom;
+                            }
+                            break;
+                    }
+                    showNotification('已设置API地址，请点击保存按钮保存', 'success');
+                };
+
+                onMounted(() => {
+                    loadCurrentConfig();
+                });
+
+                return {
+                    currentConfig,
+                    form,
+                    testing,
+                    testResult,
+                    saving,
+                    showImportModal,
+                    importText,
+                    notification,
+                    testConnection,
+                    autoDetect,
+                    saveConfig,
+                    resetConfig,
+                    exportConfig,
+                    importConfig,
+                    quickSet
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目详情 - 总承包 AI 评测系统</title>
+
+    <!-- Vue 3 Global Build CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- 引入统一配置管理 -->
+    <script src="../config.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+            min-height: 100vh;
+        }
+
+        .status-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            border: 1px solid;
+        }
+
+        .status-running {
+            background: #dbeafe;
+            color: #1d4ed8;
+            border-color: #93c5fd;
+        }
+
+        .animate-pulse-slow {
+            animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .card-hover {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+        }
+
+        .table-row-hover {
+            transition: all 0.2s ease;
+        }
+
+        .table-row-hover:hover {
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 面包屑导航 -->
+        <div class="bg-white border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <nav class="flex items-center space-x-4">
+                        <a href="frontend_improved.html" class="text-gray-600 hover:text-gray-900 flex items-center gap-1">
+                            <i class="ph-bold ph-arrow-left"></i>
+                            返回项目列表
+                        </a>
+                        <span class="text-gray-400">/</span>
+                        <span class="text-gray-900 font-medium">项目详情</span>
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主内容区域 -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" v-if="!loading && projectInfo">
+            <!-- 项目基本信息 -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h1 class="text-2xl font-bold text-gray-900">{{ projectInfo.project_name }}</h1>
+<!--                    <button @click="createNewTask" class="btn-primary text-white px-4 py-2 rounded-lg flex items-center gap-2">-->
+<!--                        <i class="ph-bold ph-plus-circle"></i>-->
+<!--                        创建新任务-->
+<!--                    </button>-->
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                    <div>
+                        <span class="text-gray-500">项目编码:</span>
+                        <span class="ml-2 text-gray-900">{{ projectInfo.project_code || '未设置' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">项目经理:</span>
+                        <span class="ml-2 text-gray-900">{{ projectInfo.epc_manager || '未设置' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">项目执行经理:</span>
+                        <span class="ml-2 text-gray-900">{{ projectInfo.entrust_manager || '未设置' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">最后更新:</span>
+                        <span class="ml-2 text-gray-900">{{ projectInfo.last_update || '未知' }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 统计信息 -->
+            <div v-if="projectStats" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white rounded-lg p-4 border border-gray-200 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">总任务数</p>
+                            <p class="text-2xl font-bold text-gray-800">{{ projectStats.task_statistics.total_tasks }}</p>
+                        </div>
+                        <div class="bg-blue-50 p-3 rounded-lg">
+                            <i class="ph-bold ph-list-checks text-blue-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg p-4 border border-gray-200 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">运行中</p>
+                            <p class="text-2xl font-bold text-blue-600">{{ getRunningTasksCount() }}</p>
+                        </div>
+                        <div class="bg-blue-50 p-3 rounded-lg">
+                            <i class="ph-bold ph-play-circle text-blue-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg p-4 border border-gray-200 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">已完成</p>
+                            <p class="text-2xl font-bold text-green-600">{{ projectStats.task_statistics.completed_tasks }}</p>
+                        </div>
+                        <div class="bg-green-50 p-3 rounded-lg">
+                            <i class="ph-bold ph-check-circle text-green-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg p-4 border border-gray-200 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">评测状态</p>
+                            <p class="text-2xl font-bold text-green-600">正常</p>
+                        </div>
+                        <div class="bg-green-50 p-3 rounded-lg">
+                            <i class="ph-bold ph-trend-up text-green-600 text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 筛选器 -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <label class="text-gray-700 text-sm font-medium">状态筛选:</label>
+                        <select v-model="statusFilter" @change="loadTasks" class="border border-gray-300 rounded-md px-3 py-2 text-sm">
+                            <option value="all">全部</option>
+                            <option value="evaluating">评测中</option>
+                            <option value="completed">已完成</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button @click="refreshTasks" class="text-blue-600 text-sm hover:underline flex items-center gap-1">
+                            <i class="ph-bold ph-arrows-clockwise" :class="{'animate-spin': loading}"></i>
+                            刷新
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 任务列表 -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-900">任务历史</h2>
+                </div>
+
+                <div v-if="tasks.length === 0" class="p-8 text-center text-gray-400">
+                    暂无任务数据
+                </div>
+
+                <div v-else class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="p-3 font-medium text-gray-900">任务发起人</th>
+                                <th class="p-3 font-medium text-gray-900">状态</th>
+                                <th class="p-3 font-medium text-gray-900">总检查项</th>
+                                <th class="p-3 font-medium text-gray-900">通过项</th>
+                                <th class="p-3 font-medium text-gray-900">通过率</th>
+                                <th class="p-3 font-medium text-gray-900">检查时间</th>
+                                <th class="p-3 font-medium text-gray-900 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="task in tasks" :key="task.id" class="border-b table-row-hover">
+                                <!-- 任务发起人列，显示check_person_name -->
+                                <td class="p-3 text-gray-600">
+                                    <span v-if="task.check_person_name" class="font-medium">{{ task.check_person_name }}</span>
+                                    <span v-else class="text-gray-400">未设置</span>
+                                </td>
+                                <td class="p-3">
+                                    <span v-if="task.status === 'IDLE'" class="status-badge bg-gray-100 text-gray-600 border-gray-200">待机</span>
+                                    <span v-else-if="task.status === 'PENDING'" class="status-badge bg-yellow-100 text-yellow-600 border-yellow-200">等待中</span>
+                                    <span v-else-if="task.status === 'SYNCING'" class="status-badge status-running">
+                                        <i class="ph-bold ph-spinner animate-spin"></i> 同步中
+                                    </span>
+                                    <span v-else-if="task.status === 'EVALUATING'" class="status-badge status-running">
+                                        <i class="ph-bold ph-spinner animate-spin"></i> 评测中
+                                    </span>
+                                    <span v-else-if="task.status === 'COMPLETED'" class="status-badge bg-green-50 text-green-600 border-green-200">已完成</span>
+                                    <span v-else-if="task.status === 'ERROR'" class="status-badge bg-red-50 text-red-600 border-red-200">异常</span>
+                                    <span v-else class="status-badge bg-gray-100 text-gray-600 border-gray-200">{{ task.status }}</span>
+                                </td>
+                                <td class="p-3 text-gray-600">
+                                    <span v-if="task.has_result">{{ task.total_items || 0 }}</span>
+                                    <span v-else class="text-gray-400">-</span>
+                                </td>
+                                <td class="p-3 text-gray-600">
+                                    <span v-if="task.has_result">{{ task.passed_items || 0 }}</span>
+                                    <span v-else class="text-gray-400">-</span>
+                                </td>
+                                <td class="p-3">
+                                    <span v-if="task.has_result" class="font-medium"
+                                          :class="task.pass_rate >= 80 ? 'text-green-600' : 'text-red-600'">
+                                        {{ task.pass_rate }}%
+                                    </span>
+                                    <span v-else class="text-gray-400">-</span>
+                                </td>
+                                <td class="p-3 text-gray-400">{{ task.updated_at || task.created_at }}</td>
+                                <td class="p-3 text-right">
+                                    <div class="flex justify-end gap-2">
+                                        <button v-if="task.has_result"
+                                                @click="viewResult(task.task_id)"
+                                                class="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
+                                            <i class="ph-bold ph-file-text"></i> 查看结果
+                                        </button>
+<!--                                        <button v-if="['IDLE', 'ERROR', 'COMPLETED'].includes(task.status)"-->
+<!--                                                @click="rerunTask(task.task_id)"-->
+<!--                                                class="text-green-600 hover:text-green-800 font-medium flex items-center gap-1">-->
+<!--                                            <i class="ph-bold ph-arrow-clockwise"></i> 重新运行-->
+<!--                                        </button>-->
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页 -->
+                <div v-if="pagination.total_pages > 1" class="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                    <div class="text-sm text-gray-500">
+                        显示 {{ (pagination.current_page - 1) * pagination.per_page + 1 }} -
+                        {{ Math.min(pagination.current_page * pagination.per_page, pagination.total_items) }}
+                        项，共 {{ pagination.total_items }} 项
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="changePage(pagination.current_page - 1)"
+                                :disabled="!pagination.has_prev"
+                                class="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                            上一页
+                        </button>
+                        <button @click="changePage(pagination.current_page + 1)"
+                                :disabled="!pagination.has_next"
+                                class="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                            下一页
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 加载状态 -->
+        <div v-if="loading" class="flex items-center justify-center min-h-screen">
+            <div class="text-center">
+                <i class="ph-bold ph-spinner animate-spin text-4xl text-blue-600 mb-4"></i>
+                <p class="text-gray-600">正在加载项目详情...</p>
+            </div>
+        </div>
+
+        <!-- 创建新任务模态框 -->
+        <div v-if="showCreateTaskModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">创建新任务</h3>
+                    <button @click="showCreateTaskModal = false" class="text-gray-400 hover:text-gray-600">
+                        <i class="ph-bold ph-x text-xl"></i>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">任务ID（可选）</label>
+                        <input v-model="newTaskId"
+                               type="text"
+                               placeholder="留空将自动生成任务ID"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <p class="text-xs text-gray-500 mt-1">任务ID用于标识不同的评测任务，建议使用有意义的名称</p>
+                    </div>
+                    <div class="flex gap-3 pt-2">
+                        <button @click="confirmCreateTask"
+                                class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                            创建任务
+                        </button>
+                        <button @click="showCreateTaskModal = false"
+                                class="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 transition-colors">
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 确认对话框模态框 -->
+        <div v-if="showConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                <div class="flex items-center mb-4">
+                    <div class="bg-yellow-100 p-2 rounded-full mr-3">
+                        <i class="ph-bold ph-warning text-yellow-600 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900">确认操作</h3>
+                </div>
+                <p class="text-gray-600 mb-6">{{ confirmMessage }}</p>
+                <div class="flex gap-3">
+                    <button @click="executeConfirmAction"
+                            class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                        确认
+                    </button>
+                    <button @click="cancelConfirmAction"
+                            class="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 transition-colors">
+                        取消
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 通知模态框 -->
+        <div v-if="showNotificationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                <div class="flex items-center mb-4">
+                    <div v-if="notificationType === 'success'" class="bg-green-100 p-2 rounded-full mr-3">
+                        <i class="ph-bold ph-check-circle text-green-600 text-xl"></i>
+                    </div>
+                    <div v-else-if="notificationType === 'error'" class="bg-red-100 p-2 rounded-full mr-3">
+                        <i class="ph-bold ph-x-circle text-red-600 text-xl"></i>
+                    </div>
+                    <div v-else class="bg-blue-100 p-2 rounded-full mr-3">
+                        <i class="ph-bold ph-info text-blue-600 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        {{ notificationType === 'success' ? '操作成功' :
+                           notificationType === 'error' ? '操作失败' : '提示' }}
+                    </h3>
+                </div>
+                <p class="text-gray-600 mb-6">{{ notificationMessage }}</p>
+                <div class="flex gap-3">
+                    <button @click="closeNotification"
+                            class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                        确定
+                    </button>
+                </div>
+            </div>
+        </div>
+
+      </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const loading = ref(true);
+                const projectId = ref('');
+                const projectInfo = ref(null);
+                const projectStats = ref(null);
+                const tasks = ref([]);
+                const pagination = ref({
+                    current_page: 1,
+                    total_pages: 0,
+                    total_items: 0,
+                    per_page: 20,
+                    has_next: false,
+                    has_prev: false
+                });
+                const statusFilter = ref('all');
+
+                // 模态框状态
+                const showCreateTaskModal = ref(false);
+                const showConfirmModal = ref(false);
+                const showNotificationModal = ref(false);
+                const newTaskId = ref('');
+                const confirmMessage = ref('');
+                const notificationMessage = ref('');
+                const notificationType = ref('success'); // success, error, info
+                const pendingAction = ref(null);
+
+                // 使用统一配置管理
+                const API_BASE = window.AppConfig.getApiBase();
+
+                // 从后端获取的并发配置
+                const CONFIG = ref({
+                    MAX_CONCURRENT_TASKS: 3, // 默认值，将从后端更新
+                    RUNNING_STATES: ['SYNCING', 'EVALUATING', 'PENDING'], // 运行中的状态
+                    RERUNNABLE_STATES: ['COMPLETED', 'ERROR', 'IDLE'] // 可重新运行的状态
+                });
+
+                // 并发状态信息
+                const concurrencyStatus = ref({
+                    current_count: 0,
+                    max_count: 3,
+                    available_slots: 3,
+                    is_allowed: true,
+                    running_tasks: []
+                });
+
+                // 获取URL参数
+                const getUrlParam = (name) => {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    return urlParams.get(name);
+                };
+
+                // 获取并发状态配置
+                const loadConcurrencyStatus = async () => {
+                    console.log('🔄 开始加载并发状态...');
+                    try {
+                        const response = await fetch(`${API_BASE}/task/concurrency/status`);
+                        console.log('📡 并发状态API响应状态:', response.status);
+
+                        const data = await response.json();
+                        console.log('📊 并发状态API响应数据:', data);
+
+                        if (data.code === 0 && data.data) {
+                            // 更新配置
+                            if (data.data.config) {
+                                CONFIG.value = {
+                                    MAX_CONCURRENT_TASKS: data.data.config.max_concurrent_tasks,
+                                    RUNNING_STATES: data.data.config.running_states,
+                                    RERUNNABLE_STATES: data.data.config.rerunnable_states
+                                };
+                                console.log('⚙️ 配置更新成功:', CONFIG.value);
+                            }
+
+                            // 更新状态
+                            concurrencyStatus.value = {
+                                current_count: data.data.current_count,
+                                max_count: data.data.max_count,
+                                available_slots: data.data.available_slots,
+                                is_allowed: data.data.is_allowed,
+                                running_tasks: data.data.running_tasks || []
+                            };
+
+                            console.log('✅ 并发状态更新成功:', concurrencyStatus.value);
+                        } else {
+                            console.error('❌ 获取并发状态失败:', data.message);
+                            // 设置默认值
+                            concurrencyStatus.value = {
+                                current_count: 0,
+                                max_count: 3,
+                                available_slots: 3,
+                                is_allowed: true,
+                                running_tasks: []
+                            };
+                        }
+                    } catch (error) {
+                        console.error('❌ 获取并发状态网络失败:', error);
+                        // 设置默认值
+                        concurrencyStatus.value = {
+                            current_count: 0,
+                            max_count: 3,
+                            available_slots: 3,
+                            is_allowed: true,
+                            running_tasks: []
+                        };
+                    }
+                };
+
+                // 获取当前正在运行的任务数量（使用后端数据）
+                const getRunningTasksCount = () => {
+                    return concurrencyStatus.value.current_count;
+                };
+
+                // 获取正在运行的任务列表（使用后端数据）
+                const getRunningTasks = () => {
+                    return concurrencyStatus.value.running_tasks;
+                };
+
+                // 加载项目统计信息
+                const loadProjectStats = async () => {
+                    try {
+                        const response = await fetch(`${API_BASE}/projects/${projectId.value}/stats`);
+                        const data = await response.json();
+                        if (data.code === 0) {
+                            projectStats.value = data.data;
+                        } else {
+                            console.error('获取项目统计失败:', data.message);
+                        }
+                    } catch (error) {
+                        console.error('获取项目统计失败:', error);
+                    }
+                };
+
+                // 加载任务列表
+                const loadTasks = async (page = 1) => {
+                    try {
+                        const params = new URLSearchParams({
+                            page: page,
+                            per_page: pagination.value.per_page
+                        });
+
+                        if (statusFilter.value && statusFilter.value !== 'all') {
+                            params.append('status', statusFilter.value);
+                        }
+
+                        const response = await fetch(`${API_BASE}/projects/${projectId.value}/tasks?${params}`);
+                        const data = await response.json();
+
+                        if (data.code === 0) {
+                            tasks.value = data.data.tasks;
+                            pagination.value = data.data.pagination;
+                            if (!projectInfo.value) {
+                                projectInfo.value = data.data.project;
+                            }
+                        } else {
+                            console.error('获取任务列表失败:', data.message);
+                        }
+                    } catch (error) {
+                        console.error('获取任务列表失败:', error);
+                    }
+                };
+
+                // 刷新数据
+                const refreshTasks = async () => {
+                    await Promise.all([
+                        loadProjectStats(),
+                        loadTasks(pagination.value.current_page),
+                        loadConcurrencyStatus()
+                    ]);
+                };
+
+                // 分页
+                const changePage = (newPage) => {
+                    if (newPage >= 1 && newPage <= pagination.value.total_pages) {
+                        loadTasks(newPage);
+                    }
+                };
+
+                
+                // 重新运行任务
+                const rerunTask = async (taskId) => {
+                    // 先检查任务状态
+                    const task = tasks.value.find(t => t.task_id === taskId);
+                    if (!task) {
+                        showNotification('未找到该任务，请刷新页面后重试。', 'error');
+                        return;
+                    }
+
+                    // 记录当前状态用于调试
+                    console.log(`尝试重新运行任务 ${taskId}，当前状态: ${task.status}`);
+
+                    // 检查任务是否正在运行中
+                    if (CONFIG.value.RUNNING_STATES.includes(task.status)) {
+                        const statusText = {
+                            'SYNCING': '正在同步文件',
+                            'EVALUATING': '正在评测中',
+                            'PENDING': '正在等待处理'
+                        }[task.status] || '正在运行';
+
+                        showNotification(`该任务${statusText}，请等待当前任务完成后再试。`, 'error');
+                        return;
+                    }
+
+                    // 使用后端数据进行并发检查
+                    if (!concurrencyStatus.value.is_allowed) {
+                        const runningTaskIds = concurrencyStatus.value.running_tasks.map(t => t.task_id).join(', ');
+                        showNotification(
+                            `当前已达到最大并发任务数限制（${concurrencyStatus.value.max_count}个）。\n正在运行的任务：${runningTaskIds}\n请等待部分任务完成后再试。`,
+                            'error'
+                        );
+                        return;
+                    }
+
+                    // 检查是否可以重新运行
+                    if (!CONFIG.value.RERUNNABLE_STATES.includes(task.status)) {
+                        showNotification(`当前任务状态为"${task.status}"，无法重新运行。`, 'error');
+                        return;
+                    }
+
+                    // 如果所有检查都通过，显示确认对话框
+                    console.log(`任务 ${taskId} 状态检查通过，准备启动`);
+                    confirmMessage.value = `确定要重新运行任务 "${taskId}" 吗？\n当前状态：${task.status}\n当前运行任务：${concurrencyStatus.value.current_count}/${concurrencyStatus.value.max_count}`;
+                    pendingAction.value = () => executeRerunTask(taskId);
+                    showConfirmModal.value = true;
+                };
+
+                // 执行重新运行任务
+                const executeRerunTask = async (taskId) => {
+                    try {
+                        // 在发送请求前，先获取最新的任务状态进行调试
+                        const currentTask = tasks.value.find(t => t.task_id === taskId);
+                        console.log('准备启动任务:', {
+                            taskId,
+                            currentStatus: currentTask?.status,
+                            allTasks: tasks.value.map(t => ({ id: t.task_id, status: t.status }))
+                        });
+
+                        const response = await fetch(`${API_BASE}/start_evaluation`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                project_id: projectId.value,
+                                task_id: taskId
+                            })
+                        });
+
+                        const data = await response.json();
+                        console.log('启动任务响应:', data);
+
+                        if (data.code === 200 || data.code === 0) {
+                            // 成功响应：200表示成功启动，0是旧版本兼容
+                            if (data.message && data.message.includes('评测已启动')) {
+                                showNotification('任务已成功启动！评测系统正在处理您的请求。', 'success');
+                            } else {
+                                showNotification('任务启动成功！', 'success');
+                            }
+                            refreshTasks();
+                        } else {
+                            // 错误处理
+                            let errorMessage = data.message;
+                            let userMessage = '';
+
+                            if (errorMessage.includes('未找到')) {
+                                userMessage = '未找到相关项目或任务，请刷新页面后重试。';
+                            } else if (errorMessage.includes('权限')) {
+                                userMessage = '您没有权限执行此操作，请联系管理员。';
+                            } else {
+                                userMessage = `启动失败：${errorMessage}`;
+                            }
+
+                            showNotification(userMessage, 'error');
+                        }
+                    } catch (error) {
+                        console.error('启动任务失败:', error);
+                        showNotification('网络连接异常，请检查网络后重试。', 'error');
+                    }
+                };
+
+                // 创建新任务
+                const createNewTask = () => {
+                    // 使用后端数据进行并发检查
+                    if (!concurrencyStatus.value.is_allowed) {
+                        const runningTaskIds = concurrencyStatus.value.running_tasks.map(t => t.task_id).join(', ');
+                        showNotification(
+                            `当前已达到最大并发任务数限制（${concurrencyStatus.value.max_count}个）。\n正在运行的任务：${runningTaskIds}\n请等待部分任务完成后再创建新任务。`,
+                            'error'
+                        );
+                        return;
+                    }
+
+                    // 如果还有可用槽位，显示创建任务模态框
+                    newTaskId.value = '';
+                    showCreateTaskModal.value = true;
+                };
+
+                // 确认创建新任务
+                const confirmCreateTask = () => {
+                    const taskId = newTaskId.value.trim() || 'task_' + Date.now();
+
+                    // 再次检查并发状态（防止在用户输入期间状态发生变化）
+                    if (!concurrencyStatus.value.is_allowed) {
+                        showNotification('当前已达到最大并发任务数限制，请等待完成后再试。', 'error');
+                        showCreateTaskModal.value = false;
+                        return;
+                    }
+
+                    showCreateTaskModal.value = false;
+                    executeRerunTask(taskId);
+                };
+
+                // 查看结果
+                const viewResult = (taskId) => {
+                    window.location.href = `ai_pingce_result.html?project_id=${projectId.value}&task_id=${taskId}`;
+                };
+
+                // 确认操作相关
+                const executeConfirmAction = () => {
+                    if (pendingAction.value) {
+                        pendingAction.value();
+                    }
+                    cancelConfirmAction();
+                };
+
+                const cancelConfirmAction = () => {
+                    showConfirmModal.value = false;
+                    confirmMessage.value = '';
+                    pendingAction.value = null;
+                };
+
+                // 通知相关方法
+                const showNotification = (message, type = 'success') => {
+                    notificationMessage.value = message;
+                    notificationType.value = type;
+                    showNotificationModal.value = true;
+                };
+
+                const closeNotification = () => {
+                    showNotificationModal.value = false;
+                    notificationMessage.value = '';
+                    notificationType.value = 'success';
+                };
+
+                // 初始化
+                onMounted(async () => {
+                    projectId.value = getUrlParam('project_id');
+                    if (projectId.value) {
+                        // 先加载并发状态，确保初始化正确
+                        try {
+                            await loadConcurrencyStatus();
+                            console.log('并发状态初始化完成:', concurrencyStatus.value);
+                        } catch (error) {
+                            console.error('并发状态初始化失败:', error);
+                        }
+
+                        // 然后加载其他数据
+                        try {
+                            await Promise.all([
+                                loadProjectStats(),
+                                loadTasks()
+                            ]);
+                        } catch (error) {
+                            console.error('加载项目数据失败:', error);
+                        }
+                    } else {
+                        alert('缺少项目ID参数');
+                        window.location.href = 'frontend_improved.html';
+                    }
+                    loading.value = false;
+                });
+
+                return {
+                    loading,
+                    projectId,
+                    projectInfo,
+                    projectStats,
+                    tasks,
+                    pagination,
+                    statusFilter,
+                    CONFIG,
+                    concurrencyStatus,
+                    // 模态框状态
+                    showCreateTaskModal,
+                    showConfirmModal,
+                    showNotificationModal,
+                    newTaskId,
+                    confirmMessage,
+                    notificationMessage,
+                    notificationType,
+                    // 方法
+                    loadTasks,
+                    refreshTasks,
+                    changePage,
+                    loadConcurrencyStatus,
+                    getRunningTasksCount,
+                    getRunningTasks,
+                    rerunTask,
+                    createNewTask,
+                    viewResult,
+                    confirmCreateTask,
+                    executeConfirmAction,
+                    cancelConfirmAction,
+                    showNotification,
+                    closeNotification
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

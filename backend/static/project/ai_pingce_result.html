@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>评测报告详情</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <!-- 引入统一配置管理 -->
+    <script src="../config.js"></script>
+    <style>
+        /* --- 核心明亮商务主题样式 (复刻图片布局) --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #F5F7FA; /* 明亮背景 */
+            color: #1F2937;
+        }
+
+        /* 滚动条适配 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+        /* 明亮卡片 (保持暗黑版的结构，改为白底) */
+        .light-card {
+            background-color: #FFFFFF;
+            border-radius: 6px;
+            border: 1px solid #E5E7EB;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        /* 表格样式 */
+        .light-table th {
+            background-color: #F9FAFB; /* 浅灰表头 */
+            color: #6B7280;
+            font-weight: bold;
+            border-bottom: 1px solid #E5E7EB;
+            text-align: left;
+            padding: 14px 16px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .light-table td {
+            border-bottom: 1px solid #F3F4F6; /* 极淡分割线 */
+            color: #374151;
+            padding: 16px;
+            vertical-align: top;
+            font-size: 14px;
+        }
+        .light-table tr:hover td {
+            background-color: #F9FAFB;
+        }
+        .light-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* 状态徽标 (保持方块风格) */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-align: center;
+            min-width: 60px;
+        }
+        .status-fail {
+            background-color: #FEF2F2; /* 浅红背景 */
+            color: #DC2626; /* 深红文字 */
+            border: 1px solid #FECACA;
+        }
+        .status-pass {
+            background-color: #ECFDF5; /* 浅绿背景 */
+            color: #059669; /* 深绿文字 */
+            border: 1px solid #A7F3D0;
+        }
+
+        /* 分类胶囊 */
+        .category-badge {
+            background-color: #F3F4F6;
+            color: #4B5563;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            border: 1px solid #E5E7EB;
+        }
+
+        /* 加载动画 */
+        .animate-fade-in { animation: fadeIn 0.6s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-8 px-6">
+
+<div id="app" class="w-full max-w-[1280px] flex flex-col gap-6">
+
+    <!-- 1. 头部区域 -->
+    <div class="flex justify-between items-start pt-2 pb-2">
+        <div>
+            <h1 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <i class="ph-fill ph-clipboard-text text-blue-600 text-2xl"></i>
+                评测报告详情
+            </h1>
+            <!-- 项目名称与任务信息 -->
+            <div class="mt-2 text-sm text-gray-600 flex flex-wrap items-center gap-3 pl-9">
+                <span v-if="projectName" class="font-bold text-gray-800">{{ projectName }}</span>
+                <span v-if="taskInfo && (taskInfo.check_date || taskInfo.check_person_name)" class="text-gray-400">|</span>
+                <span v-if="taskInfo && taskInfo.check_date" class="bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-blue-700">检查时间: {{ taskInfo.check_date }}</span>
+                <span v-if="taskInfo && taskInfo.check_person_name" class="bg-green-50 px-2 py-0.5 rounded border border-green-200 text-green-700">检查人: {{ taskInfo.check_person_name }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 加载/异常状态 -->
+    <div v-if="loading" class="py-20 flex flex-col items-center justify-center text-blue-600">
+        <i class="ph-duotone ph-spinner animate-spin text-4xl mb-4"></i>
+        <span class="text-gray-500">正在获取评测数据...</span>
+    </div>
+
+    <div v-else-if="error" class="light-card p-10 text-center border-red-100 bg-red-50">
+        <i class="ph-duotone ph-warning-circle text-4xl mb-3 text-red-500"></i>
+        <h3 class="text-lg font-bold text-red-700">无法加载报告</h3>
+        <p class="text-red-600 text-sm mt-1">{{ error }}</p>
+    </div>
+
+    <!-- 3. 核心内容区 -->
+    <div v-else class="flex flex-col gap-6 animate-fade-in">
+
+        <!-- 指标卡片 (Metrics) - 保持左侧色条布局 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+            <!-- 最终得分 -->
+            <div class="light-card p-8 flex items-center gap-6 relative overflow-hidden">
+                <!-- 左侧色条 -->
+                <div class="absolute left-0 top-8 bottom-8 w-1.5 bg-blue-600 rounded-r"></div>
+
+                <!-- 图标 (浅色背景) -->
+                <div class="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 ml-2 border border-blue-100">
+                    <i class="ph-fill ph-trophy text-2xl"></i>
+                </div>
+                <div>
+                    <div class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">最终得分</div>
+                    <div class="text-4xl font-bold text-gray-900 font-mono">
+                        {{ metrics.totalScore }} <span class="text-lg text-gray-400 font-normal">/ {{ metrics.maxScore }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 通过率 -->
+            <div class="light-card p-8 flex items-center gap-6 relative overflow-hidden">
+                <div class="absolute left-0 top-8 bottom-8 w-1.5 bg-green-600 rounded-r"></div>
+
+                <div class="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center text-green-600 ml-2 border border-green-100">
+                    <i class="ph-fill ph-chart-pie-slice text-2xl"></i>
+                </div>
+                <div>
+                    <div class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">通过检查项</div>
+                    <div class="text-4xl font-bold text-gray-900 font-mono">
+                        {{ metrics.passed }} <span class="text-base text-gray-400 font-normal">项</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 不合格项 -->
+            <div class="light-card p-8 flex items-center gap-6 relative overflow-hidden">
+                <div class="absolute left-0 top-8 bottom-8 w-1.5 bg-red-600 rounded-r"></div>
+
+                <div class="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center text-red-600 ml-2 border border-red-100">
+                    <i class="ph-fill ph-warning-circle text-2xl"></i>
+                </div>
+                <div>
+                    <div class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">待核实检查项</div>
+                    <div class="text-4xl font-bold text-gray-900 font-mono">
+                        {{ metrics.failCount }} <span class="text-base text-gray-400 font-normal">项</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 详细表格 -->
+        <div class="light-card overflow-hidden min-h-[500px] flex flex-col shadow-sm">
+            <!-- 表格头部标题栏 -->
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white">
+                <div class="flex items-center gap-4">
+                    <h3 class="font-bold text-gray-800 text-base flex items-center gap-2">
+                        <i class="ph-bold ph-list-dashes text-blue-600"></i>
+                        评测明细表
+                    </h3>
+                    <!-- 筛选按钮 -->
+                    <button @click="toggleFilterByFileList"
+                            :class="showOnlyWithFiles ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+                            class="px-3 py-1.5 text-sm font-medium rounded-lg flex items-center gap-2 transition-colors">
+                        <i class="ph-bold ph-funnel"></i>
+                        {{ showOnlyWithFiles ? '显示全部' : '只看有效的检查项' }}
+                    </button>
+                </div>
+                <div class="flex items-center gap-4">
+                    <!-- 图例 -->
+                    <div class="flex gap-4 text-xs font-medium text-gray-500">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-green-500"></span> 通过
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-red-500"></span> 不合格
+                        </div>
+                    </div>
+                    <!-- 导出按钮 -->
+                    <button @click="exportToExcel"
+                            class="px-3 py-1.5 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 transition-colors">
+                        <i class="ph-bold ph-download-simple"></i>
+                        导出Excel
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full light-table">
+                    <thead>
+                        <tr>
+                            <th class="w-1/5 pl-6">检查细项</th>
+                            <th class="w-1/6 text-center">分类</th>
+                            <th class="w-24 text-center">状态</th>
+                            <th class="w-24 text-center">得分</th>
+                            <th class="pl-6">AI 评语 / 理由</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(item, idx) in filteredDetails" :key="idx">
+                            <!-- 检查细项 -->
+                            <td class="pl-6">
+                                <div class="font-bold text-gray-800 text-sm">{{ item.item }}</div>
+                            </td>
+
+                            <!-- 分类 -->
+                            <td class="text-left pl-2">
+                                <span class="category-badge">
+                                    {{ item.category }}
+                                </span>
+                            </td>
+
+                            <!-- 状态 -->
+                            <td class="text-center">
+                                <span v-if="item.isPass" class="status-badge status-pass">PASS</span>
+                                <span v-else class="status-badge status-fail">FAIL</span>
+                            </td>
+
+                            <!-- 得分 -->
+                            <td class="text-left font-mono text-gray-700 font-bold text-base">
+                                <span :class="item.isPass ? 'text-green-600' : 'text-red-600'">{{ item.score }}</span><span class="text-gray-400 text-sm">/{{ item.maxScore }}</span>
+                            </td>
+
+                            <!-- AI 评语 -->
+                            <td class="pl-6 pr-6">
+                                <div class="text-sm leading-relaxed text-gray-600 text-justify bg-gray-50 p-3 rounded border border-gray-100">
+                                    <div v-if="!item.reason" class="italic opacity-50 flex items-center gap-1 text-gray-400">
+                                        <i class="ph-light ph-info"></i> AI 未做出明确判定
+                                    </div>
+                                    <div v-else>
+                                        {{ item.reason }}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="details.length === 0">
+                            <td colspan="5" class="text-center py-16 text-gray-400 bg-gray-50">
+                                暂无数据
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+<!--        &lt;!&ndash; 底部简单操作 &ndash;&gt;-->
+<!--        <div class="flex justify-end gap-4 mt-2">-->
+<!--            <button onclick="window.print()" class="flex items-center gap-2 text-gray-500 hover:text-blue-600 transition-colors text-sm font-medium">-->
+<!--                <i class="ph-bold ph-printer"></i> 打印报告-->
+<!--            </button>-->
+<!--            <button onclick="window.close()" class="flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-colors text-sm font-medium">-->
+<!--                关闭窗口-->
+<!--            </button>-->
+<!--        </div>-->
+
+    </div>
+
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted } = Vue;
+    // 使用统一配置管理
+    const API_BASE = window.AppConfig.getApiBase();
+
+    // Mock Data (适配明亮风格展示)
+    const mockData = {
+        project_name: "张东路1387号改扩建项目",
+        status: "COMPLETED",
+        evaluation_details: [
+            { item: "上级文件学习", category: "上级文件学习", score: 0, maxScore: 6, isPass: false, reason: "AI 未做出明确判定。未检索到相关上级文件学习会议纪要或签到表。" },
+            { item: "专业分包资质", category: "专业分包资质", score: 0, maxScore: 0, isPass: true, reason: "文件显示该公司持有“建筑工程施工总承包特级”资质。根据中国建筑业资质管理规定，施工总承包特级资质企业可以承接各等级工程施工总承包、工程总承包和项目管理业务。因此，该公司具备承接该类型工程的合规资质，满足审核要求。" },
+            { item: "专业技术培训", category: "专业技术培训", score: 8, maxScore: 8, isPass: true, reason: "1. **存在明确的年度培训计划**：文件《项目部培训计划.pdf》中包含附件1《2025年度计划》，列出了全年的8项培训安排，并已按月执行，表明培训工作有计划性。 2. **培训内容覆盖专业技术**：如《夏季施工要点及注意事项培训》、《质量学习培训，强化质量意识》、《职业健康、环境安全等培训》等，均直接与项目现场的专业技术和管理要求相关。 3. **培训按计划执行且有记录**：** 对比月度培训记录文件（5月至9月），实际开展的培训主题与年度计划中的前五项高度吻合，且每项培训都有明确的主题、内容、主讲人/记录人和签到表，证明了培训的有效实施。" },
+            { item: "质量目标策划", category: "质量管理", score: 0, maxScore: 4, isPass: false, reason: "未在《项目管理责任书》中找到明确的质量目标量化指标。" }
+        ]
+    };
+
+    createApp({
+        setup() {
+            const projectId = ref("");
+            const taskId = ref("");
+            const projectName = ref("");
+            const loading = ref(false);
+            const error = ref(null);
+
+            const details = ref([]);
+            const taskInfo = ref(null);
+            const showOnlyWithFiles = ref(false);
+
+            const filteredDetails = computed(() => {
+                const d = details.value;
+                if (!d || d.length === 0) return [];
+
+                if (!showOnlyWithFiles.value) return d;
+
+                // 更新筛选逻辑：只过滤掉评语为"未检索到相关证明材料"的检查项，其余都保留
+                return d.filter(item => {
+                    // 如果有评语且包含"未检索到相关证明材料"，则过滤掉（不显示）
+                    if (item.reason && typeof item.reason === 'string' &&
+                        item.reason.includes('未检索到相关证明材料')) {
+                        return false;
+                    }
+                    // 其余情况都保留（包括没有评语、评语为其他内容的）
+                    return true;
+                });
+            });
+
+            const metrics = computed(() => {
+                const d = filteredDetails.value;
+                if (!d || d.length === 0) return { totalScore: 0, maxScore: 0, passRate: 0, failCount: 0 };
+
+                const totalScore = d.reduce((sum, item) => sum + (Number(item.score) || 0), 0);
+                const maxScore = d.reduce((sum, item) => sum + (Number(item.maxScore) || 0), 0);
+                const passed = d.filter(item => item.isPass).length;
+                const failCount = d.filter(item => !item.isPass).length;
+                const passRate = d.length > 0 ? Math.round((passed / d.length) * 100) : 0;
+
+                return { totalScore, maxScore, passed, failCount };
+            });
+
+            const getProjectIdFromUrl = () => {
+                const params = new URLSearchParams(window.location.search);
+                return params.get('project_id');
+            };
+
+            const getTaskIdFromUrl = () => {
+                const params = new URLSearchParams(window.location.search);
+                return params.get('task_id');
+            };
+
+            const refreshData = async () => {
+                if (!projectId.value || !taskId.value) {
+                    error.value = "项目ID和任务ID都是必填参数";
+                    return;
+                }
+                loading.value = true;
+                error.value = null;
+
+                try {
+                    // 直接从 get_result 接口获取所有信息
+                    const res = await fetch(`${API_BASE}/get_result?project_id=${projectId.value}&task_id=${taskId.value}`);
+
+                    const json = await res.json();
+
+                    if (json.code === 200) {
+                        details.value = json.data.evaluation_details || [];
+                        projectName.value = json.data.project_name || projectName.value;
+
+                        // 从响应中获取任务信息
+                        taskInfo.value = {
+                            check_date: json.data.check_date,
+                            check_person_name: json.data.check_person_name
+                        };
+
+                    } else if (json.code === 404) {
+                        error.value = "未找到该项目";
+                    } else {
+                        error.value = json.message;
+                    }
+
+                } catch (e) {
+                    console.warn("Using Mock Data");
+                    details.value = mockData.evaluation_details;
+                    projectName.value = mockData.project_name;
+                    taskInfo.value = { check_date: "2025-11-26", check_person_name: "李四" };
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            // 筛选功能
+            const toggleFilterByFileList = () => {
+                showOnlyWithFiles.value = !showOnlyWithFiles.value;
+            };
+
+            // Excel导出功能
+            const exportToExcel = () => {
+                const data = filteredDetails.value;
+                if (!data || data.length === 0) {
+                    alert("暂无数据可导出");
+                    return;
+                }
+
+                // 准备Excel数据
+                const headers = ['检查细项', '分类', '状态', '得分', 'AI评语/理由'];
+                const rows = data.map(item => [
+                    item.item || '',
+                    item.category || '',
+                    item.isPass ? 'PASS' : 'FAIL',
+                    `${item.score}/${item.maxScore}`,
+                    item.reason || 'AI 未做出明确判定'
+                ]);
+
+                const worksheetData = [headers, ...rows];
+
+                // 创建工作簿
+                const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+
+                // 设置列宽
+                ws['!cols'] = [
+                    { wch: 30 }, // 检查细项
+                    { wch: 15 }, // 分类
+                    { wch: 10 }, // 状态
+                    { wch: 12 }, // 得分
+                    { wch: 50 }  // AI评语/理由
+                ];
+
+                // 设置表头样式
+                const headerStyle = {
+                    font: { bold: true, color: { rgb: "FFFFFF" } },
+                    fill: { fgColor: { rgb: "4472C4" } },
+                    alignment: { horizontal: "center", vertical: "center", wrapText: true }
+                };
+
+                // 应用表头样式（需要额外的xlsx-style库支持，这里先做基础样式）
+                for (let i = 0; i < headers.length; i++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: 0, c: i });
+                    if (!ws[cellAddress]) continue;
+                    ws[cellAddress].s = headerStyle;
+                }
+
+                // 创建工作簿并添加工作表
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "评测明细表");
+
+                // 生成文件名
+                const fileName = `${projectName.value || '评测报告'}_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`;
+
+                // 导出文件
+                XLSX.writeFile(wb, fileName);
+            };
+
+            // 补充：获取项目名称的辅助函数
+            const fetchProjectName = async (pid) => {
+                try {
+                    const res = await fetch(`${API_BASE}/projects`);
+                    const json = await res.json();
+                    if(json.code === 0) {
+                        const target = json.data.find(p => p.project_id === pid);
+                        if(target) projectName.value = target.project_name;
+                    }
+                } catch(e) {}
+            };
+
+            onMounted(() => {
+                const pid = getProjectIdFromUrl();
+                const tid = getTaskIdFromUrl();
+
+                if (pid && tid) {
+                    projectId.value = pid;
+                    taskId.value = tid;
+                    refreshData();
+                } else if (pid) {
+                    // 如果只有project_id，显示错误提示
+                    projectId.value = pid;
+                    taskId.value = "";
+                    error.value = "缺少任务ID参数，请在URL中添加task_id参数";
+                } else {
+                    // 默认显示 MOCK 以供预览
+                    projectId.value = "8a81829c845c4c98018464da870542ff";
+                    taskId.value = "mock_task";
+                    refreshData();
+                }
+            });
+
+            return {
+                projectId,
+                taskId,
+                projectName,
+                loading,
+                error,
+                details,
+                taskInfo,
+                showOnlyWithFiles,
+                filteredDetails,
+                metrics,
+                toggleFilterByFileList,
+                exportToExcel
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

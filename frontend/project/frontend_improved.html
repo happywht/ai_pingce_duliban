@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>总承包 AI 评测系统 | 智能评测中心</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- 引入统一配置管理 -->
+    <script src="../config.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #F5F7FA; }
+        .oa-card { @apply bg-white rounded-md border border-gray-200 shadow-sm; }
+        .oa-btn { @apply px-4 py-2 rounded text-white text-sm flex items-center gap-2 transition-colors cursor-pointer; }
+        .oa-btn-blue { @apply bg-blue-600 hover:bg-blue-700; }
+        .status-badge { @apply px-2 py-0.5 rounded text-xs border; }
+        .status-running { @apply bg-blue-50 text-blue-600 border-blue-200 flex w-fit items-center gap-1; }
+        .oa-table th { @apply px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200; }
+        .oa-table td { @apply px-4 py-3 text-sm text-gray-600 border-b border-gray-100; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #d1d5db; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="min-h-screen p-6 max-w-7xl mx-auto">
+
+    <header class="mb-6 flex justify-between items-center">
+        <h1 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <i class="ph-fill ph-robot text-blue-600"></i> AI 智能评测中心
+        </h1>
+        <div class="text-sm text-gray-500 flex items-center gap-2">
+            <span v-if="usingMock" class="text-orange-500 bg-orange-50 px-2 py-1 rounded text-xs border border-orange-200">
+                <i class="ph-bold ph-warning"></i> 演示模式 (无后端)
+            </span>
+        </div>
+    </header>
+
+    <!-- 项目列表 -->
+    <div class="oa-card p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="font-bold text-lg">项目监控台</h2>
+            <div class="flex gap-3">
+                <button @click="loadProjects" class="text-blue-600 text-sm hover:underline flex items-center gap-1">
+                    <i class="ph-bold ph-arrows-clockwise" :class="{'animate-spin': loading}"></i> 刷新列表
+                </button>
+            </div>
+        </div>
+
+    <!-- 项目统计概览 -->
+    <div v-if="projects.length > 0" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-lg p-4 border border-gray-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">项目总数</p>
+                    <p class="text-2xl font-bold text-gray-800">{{ projects.length }}</p>
+                </div>
+                <div class="bg-blue-50 p-3 rounded-lg">
+                    <i class="ph-bold ph-buildings text-blue-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg p-4 border border-gray-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">运行中检查</p>
+                    <p class="text-2xl font-bold text-blue-600">{{ taskStats.running_tasks || 0 }}</p>
+                </div>
+                <div class="bg-blue-50 p-3 rounded-lg">
+                    <i class="ph-bold ph-play-circle text-blue-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg p-4 border border-gray-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">已完成检查</p>
+                    <p class="text-2xl font-bold text-green-600">{{ taskStats.completed_tasks || 0 }}</p>
+                </div>
+                <div class="bg-green-50 p-3 rounded-lg">
+                    <i class="ph-bold ph-check-circle text-green-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg p-4 border border-gray-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-500 text-sm">异常检查</p>
+                    <p class="text-2xl font-bold text-red-600">{{ taskStats.error_tasks || 0 }}</p>
+                </div>
+                <div class="bg-red-50 p-3 rounded-lg">
+                    <i class="ph-bold ph-warning-circle text-red-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <table class="w-full text-sm text-left">
+            <thead class="bg-gray-50 border-b">
+                <tr>
+                    <th class="p-3">项目编号</th>
+                    <th class="p-3">项目名称</th>
+                    <th class="p-3">检查数</th>
+                    <th class="p-3">更新时间</th>
+                    <th class="p-3 text-right">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="p in projects" :key="p.project_id" class="border-b hover:bg-gray-50 transition-colors">
+                    <td class="p-3 font-mono text-gray-600">{{ p.project_code || p.project_id }}</td>
+                    <td class="p-3 font-medium">{{ p.project_name }}</td>
+                    <td class="p-3">
+                        <span class="bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs">
+                            {{ p.task_count || 0 }}
+                        </span>
+                    </td>
+                    <td class="p-3 text-gray-400">{{ p.last_update }}</td>
+                    <td class="p-3 text-right">
+                        <div class="flex justify-end gap-3">
+                            <button @click="goToProjectDetail(p.project_id)"
+                                    class="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
+                                <i class="ph-bold ph-arrow-right"></i> 查看详情
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                <tr v-if="projects.length === 0">
+                    <td colspan="5" class="p-8 text-center text-gray-400">
+                        暂无项目数据
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 新建评测任务对话框 -->
+    <div v-if="showTaskDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i class="ph-bold ph-plus-circle text-blue-600"></i>
+                新建评测检查
+            </h3>
+
+            <!-- 项目选择 -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    选择项目 <span class="text-red-500">*</span>
+                </label>
+                <select
+                    v-model="selectedProject"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    :disabled="loading"
+                >
+                    <option value="">请选择项目...</option>
+                    <option
+                        v-for="project in availableProjects"
+                        :key="project.project_id"
+                        :value="project.project_id"
+                        :disabled="!['IDLE', 'ERROR', 'COMPLETED'].includes(project.status)"
+                    >
+                        {{ project.project_name }} ({{ project.status }})
+                    </option>
+                </select>
+                <p v-if="selectedProject && !['IDLE', 'ERROR', 'COMPLETED'].includes(getProjectStatus(selectedProject))"
+                   class="mt-1 text-sm text-red-600">
+                    该项目正在执行其他任务，请等待完成后再试
+                </p>
+            </div>
+
+            <!-- 任务ID输入 -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    任务ID <span class="text-gray-400">(可选)</span>
+                </label>
+                <input
+                    v-model="newTaskId"
+                    type="text"
+                    placeholder="留空使用默认任务，或输入自定义任务ID"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    :disabled="loading"
+                >
+                <p class="mt-1 text-xs text-gray-500">
+                    任务ID用于区分同一项目的不同评测任务，建议使用有意义的标识
+                </p>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="flex justify-end gap-3 mt-6">
+                <button
+                    @click="closeTaskDialog"
+                    class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                    :disabled="loading"
+                >
+                    取消
+                </button>
+                <button
+                    @click="startTaskEvaluation"
+                    class="oa-btn oa-btn-blue"
+                    :disabled="!canStartTask || loading"
+                >
+                    <i class="ph-play-circle"></i>
+                    {{ loading ? '启动中...' : '确认启动' }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 结果展示弹窗 -->
+    <transition name="fade">
+        <div v-if="showResultModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+
+                <!-- 弹窗头部 -->
+                <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
+                            <i class="ph-fill ph-clipboard-text text-blue-600"></i>
+                            评测报告详情
+                        </h3>
+                        <div class="text-xs text-gray-500 mt-1 font-mono">项目ID: {{ currentResult.project_id }}</div>
+                        <div v-if="currentResult.current_task_id" class="text-xs text-blue-600 mt-1">任务ID: {{ currentResult.current_task_id }}</div>
+                    </div>
+                    <button @click="showResultModal = false" class="text-gray-400 hover:text-red-500 transition-colors">
+                        <i class="ph-bold ph-x text-xl"></i>
+                    </button>
+                </div>
+
+                <!-- 弹窗内容区 -->
+                <div class="p-6 overflow-y-auto custom-scrollbar flex-1 bg-gray-50/30">
+
+                    <!-- Loading 状态 -->
+                    <div v-if="currentResult.status === 'EVALUATING'" class="flex flex-col items-center justify-center h-64 text-blue-600 animate-pulse">
+                        <i class="ph-bold ph-spinner animate-spin text-4xl mb-4"></i>
+                        <span class="text-lg font-medium">AI 正在紧张评测中，请稍候...</span>
+                    </div>
+
+                    <!-- 空数据状态 -->
+                    <div v-else-if="!currentResult.details || currentResult.details.length === 0" class="text-center py-20 text-gray-400 flex flex-col items-center">
+                        <i class="ph-duotone ph-ghost text-4xl mb-2"></i>
+                        <span>暂无详细数据</span>
+                    </div>
+
+                    <!-- 正常显示内容 -->
+                    <div v-else class="space-y-6 animate-fade-in">
+
+                        <!-- 1. 仪表盘卡片 -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <!-- 最终得分 -->
+                            <div class="oa-card p-4 flex items-center gap-4 border-l-4 border-blue-500">
+                                <div class="bg-blue-50 p-3 rounded-full text-blue-600"><i class="ph-fill ph-trophy text-2xl"></i></div>
+                                <div>
+                                    <div class="text-gray-500 text-xs uppercase">最终得分</div>
+                                    <div class="text-2xl font-bold text-gray-800">
+                                        {{ reportMetrics.totalScore }}
+                                        <span class="text-sm text-gray-400 font-normal">/ {{ reportMetrics.maxScore }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 通过率 -->
+                            <div class="oa-card p-4 flex items-center gap-4 border-l-4 border-green-500">
+                                <div class="bg-green-50 p-3 rounded-full text-green-600"><i class="ph-fill ph-chart-pie-slice text-2xl"></i></div>
+                                <div>
+                                    <div class="text-gray-500 text-xs uppercase">通过率</div>
+                                    <div class="text-2xl font-bold text-gray-800">{{ reportMetrics.passRate }}%</div>
+                                </div>
+                            </div>
+                            <!-- 不合格项 -->
+                            <div class="oa-card p-4 flex items-center gap-4 border-l-4 border-red-500">
+                                <div class="bg-red-50 p-3 rounded-full text-red-600"><i class="ph-fill ph-warning-octagon text-2xl"></i></div>
+                                <div>
+                                    <div class="text-gray-500 text-xs uppercase">不合格项</div>
+                                    <div class="text-2xl font-bold text-gray-800">{{ reportMetrics.failCount }} <span class="text-sm text-gray-400 font-normal">项</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. 详细表格 -->
+                        <div class="oa-card overflow-hidden">
+                            <div class="px-6 py-3 border-b bg-gray-50 flex justify-between items-center">
+                                <h4 class="font-bold text-gray-700">评测明细表</h4>
+                                <div class="flex gap-3 text-xs">
+                                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500"></span> 通过</span>
+                                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span> 不合格</span>
+                                </div>
+                            </div>
+
+                            <table class="w-full oa-table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-1/4">检查细项</th>
+                                        <th class="w-1/6">分类</th>
+                                        <th class="w-1/12 text-center">状态</th>
+                                        <th class="w-1/12 text-center">得分</th>
+                                        <th>AI 评语 / 理由</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(item, idx) in currentResult.details" :key="idx"
+                                        :class="item.isPass ? 'hover:bg-gray-50' : 'bg-red-50/30 hover:bg-red-50/50'">
+                                        <td class="font-medium text-gray-800">{{ item.item }}</td>
+                                        <td><span class="bg-gray-100 text-gray-500 px-2 py-1 rounded text-xs">{{ item.category }}</span></td>
+                                        <td class="text-center">
+                                            <span v-if="item.isPass" class="text-green-600 text-xs font-bold bg-green-100 px-2 py-0.5 rounded border border-green-200">PASS</span>
+                                            <span v-else class="text-red-600 text-xs font-bold bg-red-100 px-2 py-0.5 rounded border border-red-200">FAIL</span>
+                                        </td>
+                                        <td class="text-center font-bold" :class="item.isPass ? 'text-green-600' : 'text-red-600'">
+                                            {{ item.score }}/{{ item.maxScore }}
+                                        </td>
+                                        <td class="text-gray-600 text-xs leading-relaxed italic">
+                                            {{ item.reason || '无详细说明' }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 弹窗底部 -->
+                <div class="p-4 border-t bg-white text-right flex justify-end gap-2">
+                    <button class="oa-btn bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-blue-600">
+                        <i class="ph-bold ph-printer"></i> 打印
+                    </button>
+                    <button @click="showResultModal = false" class="oa-btn bg-gray-800 hover:bg-gray-900">关闭窗口</button>
+                </div>
+            </div>
+        </div>
+    </transition>
+
+</div>
+
+<script>
+    const { createApp, ref, onMounted, computed } = Vue;
+    // 使用统一配置管理
+    const API_BASE = window.AppConfig.getApiBase();
+
+    // Mock Data Generator (Fallback)
+    const mockData = {
+        projects: {
+            code: 0,
+            data: [
+                {
+                    project_id: "P2024001",
+                    project_code: "BSH2024001EL",
+                    project_name: "滨海湾新区一期工程",
+                    status: "IDLE",
+                    task_count: 2,
+                    last_update: "2024-12-02 09:30"
+                },
+                {
+                    project_id: "P2024002",
+                    project_code: "BSH2024002EZ",
+                    project_name: "智慧城市数据中心",
+                    status: "COMPLETED",
+                    task_count: 3,
+                    last_update: "2024-12-01 15:45"
+                },
+                {
+                    project_id: "P2024003",
+                    project_code: "ZJ2024003E",
+                    project_name: "轨道交通三号线",
+                    status: "COMPLETED",
+                    task_count: 1,
+                    last_update: "2024-12-02 10:58"
+                }
+            ]
+        },
+        start_eval: { code: 200, message: "Mock: 任务已启动" },
+        result_completed: {
+            code: 200,
+            data: {
+                project_id: "P2024002",
+                current_task_id: "TASK_001",
+                status: "COMPLETED",
+                evaluation_details: [
+                    { item: "上级文件学习", category: "项目管理", score: 6, maxScore: 6, isPass: true, reason: "文件中包含了完整的上级文件学习记录会议纪要，符合要求。" },
+                    { item: "质量目标策划", category: "质量管理", score: 0, maxScore: 4, isPass: false, reason: "未在《项目管理责任书》中找到明确的质量目标量化指标。" },
+                    { item: "安全生产责任制", category: "安全管理", score: 5, maxScore: 5, isPass: true, reason: "已签署全员安全生产责任书，且有签字盖章。" }
+                ]
+            }
+        },
+        result_evaluating: {
+            code: 200,
+            data: { project_id: "P2024003", current_task_id: "TASK_002", status: "EVALUATING", evaluation_details: [] }
+        }
+    };
+
+    createApp({
+        setup() {
+            const projects = ref([]);
+            const showResultModal = ref(false);
+            const currentResult = ref({});
+            const loading = ref(false);
+            const usingMock = ref(false);
+            const showTaskDialog = ref(false);
+            const taskStats = ref({
+                total_projects: 0,
+                total_tasks: 0,
+                running_tasks: 0,
+                completed_tasks: 0,
+                error_tasks: 0
+            });
+            const newTaskId = ref('');
+            const selectedProject = ref(null);
+            let timer = null;
+
+            // 计算属性：可用于选择的项目（排除正在执行中的项目）
+            const availableProjects = computed(() => {
+                return projects.value.filter(project =>
+                    ['IDLE', 'ERROR', 'COMPLETED'].includes(project.status)
+                );
+            });
+
+            // 计算属性：是否可以启动任务
+            const canStartTask = computed(() => {
+                if (!selectedProject.value || loading.value) return false;
+
+                const project = projects.value.find(p => p.project_id === selectedProject.value);
+                if (!project) return false;
+
+                return ['IDLE', 'ERROR', 'COMPLETED'].includes(project.status);
+            });
+
+            // 获取项目状态
+            const getProjectStatus = (projectId) => {
+                const project = projects.value.find(p => p.project_id === projectId);
+                return project ? project.status : 'UNKNOWN';
+            };
+
+            // 计算属性：用于计算仪表盘数据
+            const reportMetrics = computed(() => {
+                const details = currentResult.value.details || [];
+                if (details.length === 0) return { totalScore: 0, maxScore: 0, passRate: 0, failCount: 0 };
+
+                const totalScore = details.reduce((acc, cur) => acc + (cur.score || 0), 0);
+                const maxScore = details.reduce((acc, cur) => acc + (cur.maxScore || 0), 0);
+                const passed = details.filter(d => d.isPass).length;
+                const passRate = Math.round((passed / details.length) * 100);
+                const failCount = details.length - passed;
+
+                return { totalScore, maxScore, passRate, failCount };
+            });
+
+            const fetchAPI = async (endpoint, options = {}) => {
+                const url = `${API_BASE}${endpoint}`;
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) throw new Error("Server Error");
+                    usingMock.value = false;
+                    return await response.json();
+                } catch (e) {
+                    console.warn(`[API Fail] Switch to Mock.`, e);
+                    usingMock.value = true;
+                    await new Promise(r => setTimeout(r, 600));
+
+                    if (endpoint.includes('/projects')) return mockData.projects;
+                    if (endpoint.includes('/start_evaluation')) {
+                         const pid = JSON.parse(options.body).project_id;
+                         const tid = JSON.parse(options.body).task_id;
+                         const target = projects.value.find(p => p.project_id === pid);
+                         if(target) {
+                             target.status = 'EVALUATING';
+                             target.current_task_id = tid;
+                         }
+                         return mockData.start_eval;
+                    }
+                    if (endpoint.includes('/get_result')) {
+                        const urlParams = new URLSearchParams(endpoint.split('?')[1]);
+                        const pid = urlParams.get('project_id');
+                        const tid = urlParams.get('task_id');
+                        const target = projects.value.find(p => p.project_id === pid);
+                        if (target && target.status === 'EVALUATING') return mockData.result_evaluating;
+
+                        let res = JSON.parse(JSON.stringify(mockData.result_completed));
+                        res.data.project_id = pid;
+                        res.data.current_task_id = tid || 'DEFAULT_TASK';
+                        return res;
+                    }
+                    return { code: 500, message: "Error" };
+                }
+            };
+
+            const loadProjects = async () => {
+                loading.value = true;
+                const res = await fetchAPI('/projects');
+                if (res.code === 0) {
+                    if (!usingMock.value || projects.value.length === 0) {
+                        projects.value = res.data;
+                    }
+                }
+                loading.value = false;
+            };
+
+            // 加载任务统计数据
+            const loadTaskStatistics = async () => {
+                try {
+                    const res = await fetchAPI('/task_statistics');
+                    if (res.code === 0) {
+                        taskStats.value = res.data;
+                    }
+                } catch (error) {
+                    console.error('加载任务统计失败:', error);
+                }
+            };
+
+            const startEvaluation = async (pid, taskId = null) => {
+                const res = await fetchAPI('/start_evaluation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: pid,
+                        ...(taskId && { task_id: taskId })
+                    })
+                });
+
+                if (res.code === 200) {
+                    alert("✅ 任务已启动");
+                    loadProjects();
+                    if (usingMock.value) {
+                        setTimeout(() => {
+                            const p = projects.value.find(x => x.project_id === pid);
+                            if(p) {
+                                p.status = 'COMPLETED';
+                                p.current_task_id = taskId;
+                            }
+                        }, 3000);
+                    }
+                } else {
+                    alert("❌ 启动失败: " + res.message);
+                }
+            };
+
+            // 表单验证函数
+            const validateTaskForm = () => {
+                if (!selectedProject.value) {
+                    showError("请选择要操作的项目");
+                    return false;
+                }
+
+                const project = projects.value.find(p => p.project_id === selectedProject.value);
+                if (!project) {
+                    showError("项目不存在");
+                    return false;
+                }
+
+                if (!['IDLE', 'ERROR', 'COMPLETED'].includes(project.status)) {
+                    showError("项目正在执行其他任务，请稍后再试");
+                    return false;
+                }
+
+                if (newTaskId.value && !/^[a-zA-Z0-9_-]{1,50}$/.test(newTaskId.value)) {
+                    showError("任务ID只能包含字母、数字、下划线和横线，长度1-50字符");
+                    return false;
+                }
+
+                return true;
+            };
+
+            // 显示错误提示（友好的Toast通知）
+            const showError = (message) => {
+                // 创建Toast元素
+                const toast = document.createElement('div');
+                toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
+                toast.innerHTML = `
+                    <i class="ph-bold ph-x-circle"></i>
+                    <span>${message}</span>
+                `;
+                document.body.appendChild(toast);
+
+                // 3秒后自动移除
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transition = 'opacity 0.3s';
+                    setTimeout(() => document.body.removeChild(toast), 300);
+                }, 3000);
+            };
+
+            // 显示成功提示
+            const showSuccess = (message) => {
+                const toast = document.createElement('div');
+                toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
+                toast.innerHTML = `
+                    <i class="ph-bold ph-check-circle"></i>
+                    <span>${message}</span>
+                `;
+                document.body.appendChild(toast);
+
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transition = 'opacity 0.3s';
+                    setTimeout(() => document.body.removeChild(toast), 3000);
+                }, 3000);
+            };
+
+            // 关闭任务对话框
+            const closeTaskDialog = () => {
+                showTaskDialog.value = false;
+                selectedProject.value = null;
+                newTaskId.value = '';
+            };
+
+            // 任务轮询相关变量
+            const pollingTasks = ref(new Set()); // 存储正在轮询的任务
+            let pollingIntervals = {}; // 存储轮询定时器
+
+            // 开始轮询任务状态
+            const startTaskPolling = (projectId, taskId) => {
+                const pollingKey = `${projectId}_${taskId || 'default'}`;
+
+                // 如果已经在轮询，先停止
+                if (pollingTasks.value.has(pollingKey)) {
+                    stopTaskPolling(projectId, taskId);
+                    return;
+                }
+
+                pollingTasks.value.add(pollingKey);
+
+                // 立即查询一次状态
+                pollTaskStatus(projectId, taskId);
+
+                // 每3秒轮询一次
+                pollingIntervals[pollingKey] = setInterval(() => {
+                    pollTaskStatus(projectId, taskId);
+                }, 3000);
+            };
+
+            // 停止轮询任务状态
+            const stopTaskPolling = (projectId, taskId) => {
+                const pollingKey = `${projectId}_${taskId || 'default'}`;
+
+                if (pollingIntervals[pollingKey]) {
+                    clearInterval(pollingIntervals[pollingKey]);
+                    delete pollingIntervals[pollingKey];
+                }
+
+                pollingTasks.value.delete(pollingKey);
+            };
+
+            // 查询任务状态
+            const pollTaskStatus = async (projectId, taskId) => {
+                try {
+                    const res = await fetchAPI(`/get_result?project_id=${projectId}${taskId ? `&task_id=${taskId}` : ''}`);
+
+                    if (res.code === 200) {
+                        const status = res.data.status;
+
+                        // 更新项目状态
+                        const project = projects.value.find(p => p.project_id === projectId);
+                        if (project) {
+                            project.status = status;
+                            project.current_task_id = res.data.current_task_id || taskId;
+                            project.last_update = new Date().toLocaleString('zh-CN');
+                        }
+
+                        // 如果任务完成或出错，停止轮询
+                        if (['COMPLETED', 'ERROR'].includes(status)) {
+                            stopTaskPolling(projectId, taskId);
+
+                            if (status === 'COMPLETED') {
+                                showSuccess(`✅ 项目 ${projectId} 的评测任务已完成！`);
+                            } else if (status === 'ERROR') {
+                                showError(`❌ 项目 ${projectId} 的评测任务执行失败`);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('轮询任务状态失败:', error);
+                }
+            };
+
+            // 改进的任务启动函数
+            const startTaskEvaluation = async () => {
+                if (!validateTaskForm()) {
+                    return;
+                }
+
+                try {
+                    loading.value = true;
+                    const projectId = selectedProject.value; // 保存项目ID
+                    const taskId = newTaskId.value || null;
+
+                    await startEvaluation(projectId, taskId);
+
+                    showSuccess("✅ 任务已启动，正在执行评测...");
+                    showTaskDialog.value = false;
+                    selectedProject.value = null;
+                    newTaskId.value = '';
+
+                    // 立即刷新项目列表
+                    await loadProjects();
+
+                    // 开始轮询任务状态
+                    startTaskPolling(projectId, taskId);
+
+                } catch (error) {
+                    console.error('启动任务失败:', error);
+                    showError("❌ 启动失败: " + error.message);
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            const fetchResult = async (pid) => {
+                const res = await fetchAPI(`/get_result?project_id=${pid}`);
+                if (res.code === 200) {
+                    currentResult.value = {
+                        project_id: res.data.project_id,
+                        current_task_id: res.data.current_task_id || null,
+                        status: res.data.status,
+                        details: res.data.evaluation_details || []
+                    };
+                    showResultModal.value = true;
+                } else {
+                    alert(res.message);
+                }
+            };
+
+            onMounted(() => {
+                loadProjects();
+                loadTaskStatistics();
+                timer = setInterval(() => {
+                    if(!usingMock.value) {
+                        loadProjects();
+                        loadTaskStatistics();
+                    }
+                }, 30000); // 固定时间t刷新项目信息；
+            });
+
+            // 统计函数
+            const getRunningProjectsCount = () => {
+                return projects.value.filter(p => ['EVALUATING', 'SYNCING'].includes(p.status)).length;
+            };
+
+            const getCompletedProjectsCount = () => {
+                return projects.value.filter(p => p.status === 'COMPLETED').length;
+            };
+
+            const getErrorProjectsCount = () => {
+                return projects.value.filter(p => p.status === 'ERROR').length;
+            };
+
+            // 导航到项目详情页
+            const goToProjectDetail = (projectId) => {
+                // 构建项目详情页URL
+                const detailUrl = `project-detail.html?project_id=${encodeURIComponent(projectId)}`;
+                window.open(detailUrl, '_blank');
+            };
+
+            return {
+                projects, loading, usingMock, loadProjects, startEvaluation, fetchResult,
+                showResultModal, currentResult, reportMetrics, showTaskDialog, newTaskId,
+                selectedProject, startTaskEvaluation,
+                // 任务统计数据
+                taskStats,
+                // 新增的统计和导航函数
+                getRunningProjectsCount, getCompletedProjectsCount, getErrorProjectsCount,
+                goToProjectDetail,
+                // 新增的计算属性和函数
+                availableProjects, canStartTask, getProjectStatus,
+                validateTaskForm, closeTaskDialog, showError, showSuccess,
+                // 任务轮询相关
+                pollingTasks, startTaskPolling, stopTaskPolling, pollTaskStatus
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

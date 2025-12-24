@@ -1,0 +1,43 @@
+# 核心Web框架
+Flask==2.3.3
+Flask-CORS==4.0.0
+Flask-SQLAlchemy==3.0.5
+
+# 数据库驱动
+pyodbc==5.0.1              # SQL Server ODBC驱动
+pymysql==1.1.0              # MySQL驱动 (备用)
+psycopg2-binary==2.9.7      # PostgreSQL驱动 (备用)
+
+# HTTP请求
+requests==2.31.0
+urllib3==2.0.7
+
+# AI相关
+anthropic==0.7.8
+
+# 配置管理
+python-dotenv==1.0.0
+
+# 文档解析（可选）
+pytesseract==0.3.10
+pdf2image==1.17.0
+pypdf==3.17.0
+python-docx==1.1.0
+Pillow==10.1.0
+
+# Excel处理（可选）
+pandas==2.1.4
+openpyxl==3.1.2
+
+# 其他依赖
+numpy==1.26.0
+python-dateutil==2.8.2
+PyYAML==6.0.1
+
+# Windows特定（打包时需要）
+pywin32==306
+pywin32ctypes==0.2.2
+
+# 加密相关
+cffi==1.16.0
+cryptography==41.0.8
